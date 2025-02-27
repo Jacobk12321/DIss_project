@@ -1,4 +1,4 @@
-pyautogi
+pyautogui
 pillow
 keyboard
 mouse
