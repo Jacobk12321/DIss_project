@@ -1,0 +1,6 @@
+pyautogi
+pillow
+keyboard
+mouse
+numpy
+opencv-python
