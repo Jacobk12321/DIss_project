@@ -4,3 +4,4 @@ keyboard
 mouse
 numpy
 opencv-python
+pygame
