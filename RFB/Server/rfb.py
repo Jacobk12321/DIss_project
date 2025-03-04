@@ -3,6 +3,7 @@ import struct
 import hashlib
 import time
 from PIL import ImageGrab
+import os
 
 PASSWORD = "secret"  # The same password as on the client
 
@@ -34,15 +35,19 @@ class RFBServer:
         print("Sent server version: RFB 003.008")
         return True
 
+    import os  # Import for random challenge generation
+
     def authenticate_client(self):
         """Handle VNC authentication."""
         self.client_sock.sendall(b'\x02')  # VNC authentication
-        challenge = b"1234567890123456"  # Fake challenge for simplicity
+        
+        # Generate a random challenge
+        challenge = os.urandom(16)
         self.client_sock.sendall(challenge)
 
         # Receive the client's hash response
         received_hash = self.client_sock.recv(16)
-        expected_hash = hashlib.md5((PASSWORD + challenge.decode()).encode()).digest()
+        expected_hash = hashlib.md5((PASSWORD.encode() + challenge)).digest()
 
         if received_hash == expected_hash:
             print("Authentication successful")
@@ -53,6 +58,7 @@ class RFBServer:
             self.client_sock.close()
             return False
         return True
+
 
     def capture_screen(self):
         """Capture the screen and send framebuffer updates."""
