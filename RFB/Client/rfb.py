@@ -57,7 +57,7 @@ class RFBClient:
         auth_type = self.recv_exact(1)
         if auth_type == b'\x02':  # VNC Authentication
             challenge = self.recv_exact(16)
-            hash_response = hashlib.md5((PASSWORD + challenge.decode()).encode()).digest()
+            hash_response = hashlib.md5((PASSWORD.encode() + challenge)).digest()
             self.sock.sendall(hash_response)
             response = self.recv_exact(4)
             if response != b'\x00\x00\x00\x00':
