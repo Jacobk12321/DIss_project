@@ -2,10 +2,12 @@ import socket
 import struct
 import hashlib
 import time
-from PIL import ImageGrab
 import os
+import pyautogui
+from PIL import ImageGrab
+import threading
 
-PASSWORD = "secret"  # The same password as on the client
+PASSWORD = "secret"
 
 class RFBServer:
     def __init__(self, host, port):
@@ -22,65 +24,71 @@ class RFBServer:
 
     def perform_handshake(self):
         """Perform the initial handshake with the client."""
-        client_version = self.client_sock.recv(12)
-        decoded_version = client_version.decode("utf-8").strip()
-        print(f"Received client version: {decoded_version}")
-        
-        if not decoded_version.startswith("RFB 003"):
-            print("Error: Unexpected client version.")
-            return False
-        
-        # Send server version
+        client_version = self.client_sock.recv(12).decode("utf-8").strip()
+        print(f"Received client version: {client_version}")
         self.client_sock.sendall(b"RFB 003.008\n")
-        print("Sent server version: RFB 003.008")
-        return True
-
-    import os  # Import for random challenge generation
+        return client_version.startswith("RFB 003")
 
     def authenticate_client(self):
         """Handle VNC authentication."""
-        self.client_sock.sendall(b'\x02')  # VNC authentication
-        
-        # Generate a random challenge
+        self.client_sock.sendall(b'\x02')
         challenge = os.urandom(16)
         self.client_sock.sendall(challenge)
 
-        # Receive the client's hash response
         received_hash = self.client_sock.recv(16)
         expected_hash = hashlib.md5((PASSWORD.encode() + challenge)).digest()
 
         if received_hash == expected_hash:
             print("Authentication successful")
-            self.client_sock.sendall(b'\x00\x00\x00\x00')  # Auth success
+            self.client_sock.sendall(b'\x00\x00\x00\x00')
+            return True
         else:
             print("Authentication failed")
-            self.client_sock.sendall(b'\x00\x00\x00\x01')  # Auth failure
+            self.client_sock.sendall(b'\x00\x00\x00\x01')
             self.client_sock.close()
             return False
-        return True
-
 
     def capture_screen(self):
-        """Capture the screen and send framebuffer updates."""
+        """Capture and send screen updates."""
         while True:
-            time.sleep(1/30)  # Reduce CPU usage (30 FPS)
-            screen = ImageGrab.grab()  # Take a screenshot
+            time.sleep(1/30)
+            screen = ImageGrab.grab()
             width, height = screen.size
-            pixels = list(screen.getdata())  # Get pixel data as a list of RGB tuples
-            
-            # Send framebuffer update
-            header = struct.pack(">BxH", 0, 1)  # Framebuffer update header
-            rect_header = struct.pack(">HHHHI", 0, 0, width, height, 0)  # Rectangle header (no encoding)
-            pixel_data = b''.join([struct.pack(">B", c) for pixel in pixels for c in pixel])  # Pack the pixels
-            
+            pixels = list(screen.getdata())
+
+            header = struct.pack(">BxH", 0, 1)
+            rect_header = struct.pack(">HHHHI", 0, 0, width, height, 0)
+            pixel_data = b''.join([struct.pack(">B", c) for pixel in pixels for c in pixel])
+
             try:
                 self.client_sock.sendall(header + rect_header + pixel_data)
             except (ConnectionResetError, BrokenPipeError):
                 print("Connection closed by client")
                 break
 
+    def handle_client_inputs(self):
+        """Receive and process mouse/keyboard inputs."""
+        while True:
+            msg_type = self.client_sock.recv(1)
+            if not msg_type:
+                break
+
+            if msg_type == b'\x05':  # Mouse event
+                button_mask, x, y = struct.unpack(">BHH", self.client_sock.recv(5))
+                pyautogui.moveTo(x, y, duration=0, _pause=False)
+                if button_mask:
+                    pyautogui.click()
+
+            elif msg_type == b'\x04':  # Keyboard event
+                down_flag, keycode = struct.unpack(">BI", self.client_sock.recv(5))
+                key = chr(keycode) if keycode < 256 else ""
+                if down_flag:
+                    pyautogui.keyDown(key)
+                else:
+                    pyautogui.keyUp(key)
+
     def run(self):
         self.accept_connection()
-        if self.perform_handshake():
-            if self.authenticate_client():
-                self.capture_screen()
+        if self.perform_handshake() and self.authenticate_client():
+            threading.Thread(target=self.handle_client_inputs, daemon=True).start()
+            self.capture_screen()
