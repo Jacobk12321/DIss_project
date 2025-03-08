@@ -11,20 +11,25 @@ PASSWORD = "secret"  # Same as server
 
 class RFBClient:
     def __init__(self, host, port):
-        """Initialize the RFB client connection."""
         self.host = host
         self.port = port
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((host, port))
 
-        # Set up the Tkinter window for displaying the framebuffer
+        # Tkinter setup
         self.window = tk.Tk()
         self.window.title("VNC Client")
         self.canvas = tk.Canvas(self.window)
         self.canvas.pack(fill=tk.BOTH, expand=True)
-
         self.img_tk = None
         self.img = None
+
+        # Bind input events
+        self.canvas.bind("<Motion>", self.send_mouse_event)
+        self.canvas.bind("<ButtonPress>", self.send_mouse_event)
+        self.canvas.bind("<ButtonRelease>", self.send_mouse_event)
+        self.window.bind("<KeyPress>", self.send_key_event)
+        self.window.bind("<KeyRelease>", self.send_key_event)
 
     def recv_exact(self, num_bytes):
         """Receive an exact number of bytes."""
@@ -38,24 +43,15 @@ class RFBClient:
 
     def perform_handshake(self):
         """Perform the initial handshake with the server."""
-        # Send RFB 3.8 handshake
-        handshake_message = b"RFB 003.008\n"
-        self.sock.sendall(handshake_message)
-
-        # Receive server version
-        server_version = self.sock.recv(12)
-        decoded_version = server_version.decode("utf-8").strip()
-        print(f"Received server version: {decoded_version}")
-        if not decoded_version.startswith("RFB 003"):
-            print("Error: Unexpected server version.")
-            return False
-
-        return True
+        self.sock.sendall(b"RFB 003.008\n")
+        server_version = self.sock.recv(12).decode("utf-8").strip()
+        print(f"Received server version: {server_version}")
+        return server_version.startswith("RFB 003")
 
     def authenticate(self):
         """Handle VNC authentication."""
         auth_type = self.recv_exact(1)
-        if auth_type == b'\x02':  # VNC Authentication
+        if auth_type == b'\x02':
             challenge = self.recv_exact(16)
             hash_response = hashlib.md5((PASSWORD.encode() + challenge)).digest()
             self.sock.sendall(hash_response)
@@ -68,54 +64,60 @@ class RFBClient:
 
     def setup(self):
         """Send the client initialization message."""
-        self.sock.sendall(b'\x01')  # Request to share the screen
+        self.sock.sendall(b'\x01')
 
     def update_framebuffer(self, width, height, pixel_data):
-        """Update the framebuffer and show on Tkinter canvas."""
-        # Convert raw pixel data to numpy array
+        """Efficiently update the framebuffer without flickering."""
         pixels = np.frombuffer(pixel_data, dtype=np.uint8).reshape((height, width, 3))
-
-        # Create Image from numpy array
         self.img = Image.fromarray(pixels)
-        
-        # Create a PhotoImage for Tkinter
-        self.img_tk = ImageTk.PhotoImage(self.img)
 
-        # Update canvas image
-        self.canvas.create_image(0, 0, anchor=tk.NW, image=self.img_tk)
-        self.window.update_idletasks()
+        if self.img_tk is None:
+            self.img_tk = ImageTk.PhotoImage(self.img)
+            self.canvas.create_image(0, 0, anchor=tk.NW, image=self.img_tk)
+        else:
+            self.img_tk.paste(self.img)
+
         self.window.update()
 
+
     def receive_framebuffer_update(self):
-        """Receive and display framebuffer updates in real-time."""
+        """Receive and display framebuffer updates."""
         try:
             while True:
-                # Framebuffer update header
-                self.recv_exact(1)  # message type
-                self.recv_exact(1)  # padding
+                self.recv_exact(1)  # Message type
+                self.recv_exact(1)  # Padding
                 num_rectangles = struct.unpack(">H", self.recv_exact(2))[0]
-                
-                for _ in range(num_rectangles):
-                    # Rectangle header (x, y, width, height, encoding)
-                    x, y, width, height, encoding = struct.unpack(">HHHHI", self.recv_exact(12))
-                    
-                    # Read the pixel data (RGB format)
-                    pixel_data = self.recv_exact(width * height * 3)
 
-                    # Update the framebuffer in Tkinter
+                for _ in range(num_rectangles):
+                    x, y, width, height, encoding = struct.unpack(">HHHHI", self.recv_exact(12))
+                    pixel_data = self.recv_exact(width * height * 3)
                     self.update_framebuffer(width, height, pixel_data)
 
         except Exception as e:
             print(f"Error receiving framebuffer update: {e}")
+
+    def send_mouse_event(self, event):
+        """Send mouse movement and button events."""
+        button_mask = 0
+        if event.type == tk.EventType.ButtonPress:
+            button_mask = event.num
+        elif event.type == tk.EventType.ButtonRelease:
+            button_mask = 0
+
+        msg = struct.pack(">BBHH", 5, button_mask, event.x, event.y)
+        self.sock.sendall(msg)
+
+    def send_key_event(self, event):
+        """Send keyboard press and release events."""
+        down_flag = 1 if event.type == tk.EventType.KeyPress else 0
+        keycode = ord(event.char) if event.char else event.keysym_num
+        msg = struct.pack(">BBI", 4, down_flag, keycode)
+        self.sock.sendall(msg)
 
     def run(self):
         """Start the client."""
         if self.perform_handshake():
             self.authenticate()
             self.setup()
-
-            # Start receiving updates in a separate thread
             threading.Thread(target=self.receive_framebuffer_update, daemon=True).start()
-
-            # Run Tkinter main loop
             self.window.mainloop()
