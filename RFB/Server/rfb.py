@@ -37,11 +37,11 @@ class RFBServer:
     def authenticate_client(self):
         """Handle VNC authentication."""
         self.client_sock.sendall(b'\x02')  # Only support password auth
-        challenge = os.urandom(16)
+        challenge = os.urandom(16)  # random challenge for security
         self.client_sock.sendall(challenge)
 
-        received_hash = self.client_sock.recv(16)
-        expected_hash = hashlib.md5((PASSWORD.encode() + challenge)).digest()
+        received_hash = self.client_sock.recv(16)  # hash from client
+        expected_hash = hashlib.md5((PASSWORD.encode() + challenge)).digest()  # expected hash
 
         if received_hash == expected_hash:
             print("Authentication successful")
@@ -56,12 +56,12 @@ class RFBServer:
     def capture_screen(self):
         """Capture the entire desktop across all monitors and send only changed areas."""
         with mss.mss() as sct:
-            previous_frame = None  # Store the previous screen for comparison
+            previous_frame = None  # Saves previous frame so that it doesn't flash
 
             while True:
-                time.sleep(1 / 30)  # Capture at ~30 FPS
+                time.sleep(1 / 30)  # Roughly 30 FPS
 
-                # Get the full desktop (all monitors)
+                # Get the full desktop
                 screenshot = sct.grab(sct.monitors[0])  
                 img = Image.frombytes("RGB", (screenshot.width, screenshot.height), screenshot.rgb)
 

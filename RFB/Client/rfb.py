@@ -63,7 +63,7 @@ class RFBClient:
         pixels = np.frombuffer(pixel_data, dtype=np.uint8).reshape((height, width, 3))
         new_patch = Image.fromarray(pixels)
 
-        # If first frame, create full-screen image
+        #create full-screen image if it doesn't exist
         if self.img is None:
             screen_width = self.canvas.winfo_screenwidth()
             screen_height = self.canvas.winfo_screenheight()
