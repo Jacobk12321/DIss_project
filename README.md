@@ -10,8 +10,8 @@ Inside of the main.py on the client side (Client folder) you will need to change
 On windows this can be found by opening Command line and typing ipconfig (on windows) and then taking this value and swapping it with the one inside of the file.
 
 How to get running?
-1. On one device run the Main.py in the server side to start the server up.
-2. On another device run the Main.py in the client side to start the client up.
+1. On one device run the Main.py (Server folder) to start the server.
+2. On another device run the Main.py (Client folder) to start the client.
  
 This will open a window of the other screen allowing for updates from the client to the server.
 
