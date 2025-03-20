@@ -7,7 +7,7 @@ where "" is the module such as numpy or pyautogui.
 
 Key information:
 Inside of the main.py on the client side (Client folder) you will need to change the IP address to the IP of your server.
-On windows this can be found by opening Command line and typing ipconfig and then taking this value and swapping it with the one inside of the file.
+On windows this can be found by opening Command line and typing ipconfig (on windows) and then taking this value and swapping it with the one inside of the file.
 
 How to get running?
 1. On one device run the Main.py in the server side to start the server up.
