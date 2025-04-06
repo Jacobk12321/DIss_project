@@ -23,7 +23,7 @@ class Renderer:
             pygame.display.flip()  # Refresh the display
 
         except Exception as e:
-            print(f"❌ Error updating screen: {e}")
+            print(f"Error updating screen: {e}")
 
     def run(self):
         """Run the rendering loop."""
