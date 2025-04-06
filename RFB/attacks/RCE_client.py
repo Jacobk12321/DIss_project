@@ -1,7 +1,7 @@
 import socket
 
 # Server's IP and port
-HOST = '192.168.0.18' 
+HOST = '192.168.0.18' # needs to change to the server IP
 PORT = 5901 
 
 # Create a socket and connect to the server
