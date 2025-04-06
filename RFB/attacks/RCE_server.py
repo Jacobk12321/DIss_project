@@ -13,7 +13,7 @@ def execute_command(cmd):
         try:
             # Step 1: Create a temp file with a message
             with tempfile.NamedTemporaryFile(delete=False, suffix=".txt", mode="w", encoding="utf-8") as f:
-                f.write("This is an RCE attack. \n Your Server is insecure")
+                f.write("This is an RCE attack. \n Your Server is insecure") # custom message
                 temp_file_path = f.name
 
             # Step 2: Open Notepad with the file

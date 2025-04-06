@@ -11,7 +11,7 @@ def start_fake_server(host='0.0.0.0', port=5900):
     print(f"Listening for VNC connections on {host}:{port}...")
 
     client_sock, addr = server_sock.accept()
-    print(f"[+] Got connection from {addr}")
+    print(f" Got connection from {addr}")
 
     # Receive version from client, send ours back
     version = client_sock.recv(12).decode()
@@ -32,7 +32,7 @@ def start_fake_server(host='0.0.0.0', port=5900):
     expected = hashlib.md5((FAKE_PASSWORD.encode() + challenge)).digest()
     print(f" Expected hash:   {expected.hex()}")
     if response == expected:
-        print("Password match! (Client used 'secret')")
+        print(f"Password match! (Client used {expected}!!)")
     else:
         print("Password mismatch.")
 
