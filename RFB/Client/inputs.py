@@ -20,9 +20,18 @@ class InputHandler:
             print(" Error: Client object not initialized properly.")
 
     def on_key_event(self, event, is_pressed):
-        """Handle key press events."""
         try:
-            if len(event.name) == 1:  # Ensure it's a single character
-                self.client.send_key_event(ord(event.name), int(is_pressed))
+            if len(event.name) == 1 or event.name.startswith('f'):  # support F-keys too
+                key_code = ord(event.name) if len(event.name) == 1 else self.key_name_to_code(event.name)
+                self.client.send_key_event(key_code, int(is_pressed))
         except AttributeError:
             print("Error: Client object not initialized properly.")
+
+    def key_name_to_code(self, key_name):
+        """Map key name (e.g., 'f12') to keycode (F12 = 123)"""
+        function_keys = {
+            'f1': 112, 'f2': 113, 'f3': 114, 'f4': 115, 'f5': 116, 'f6': 117,
+            'f7': 118, 'f8': 119, 'f9': 120, 'f10': 121, 'f11': 122, 'f12': 123
+        }
+        return function_keys.get(key_name.lower(), 0)
+

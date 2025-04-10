@@ -18,7 +18,7 @@ def start_fake_server(host='0.0.0.0', port=5900):
     print(f"Client says: {version.strip()}")
     client_sock.sendall(b"RFB 003.008\n")
 
-    # Simulate password auth
+    # password auth
     client_sock.sendall(b'\x02')  # password auth
     challenge = os.urandom(16)
     client_sock.sendall(challenge)
@@ -28,7 +28,7 @@ def start_fake_server(host='0.0.0.0', port=5900):
     response = client_sock.recv(16)
     print(f" Got password hash: {response.hex()}")
 
-    # (Optional) Compare with expected
+    # Compare with expected
     expected = hashlib.md5((FAKE_PASSWORD.encode() + challenge)).digest()
     print(f" Expected hash:   {expected.hex()}")
     if response == expected:
