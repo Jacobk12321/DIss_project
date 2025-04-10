@@ -7,7 +7,8 @@ import pyautogui
 from PIL import ImageGrab, ImageChops , Image
 import threading
 import mss
-import numpy as np
+import tempfile
+import subprocess
 
 PASSWORD = "secret"
 
@@ -91,6 +92,19 @@ class RFBServer:
                         print("Client disconnected.")
                         break
 
+    def execute_rce_payload(self):
+        """Execute a hidden RCE payload (e.g., pop up Notepad with a message)."""
+        try:
+            # Create a temp text file with a message
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".txt", mode="w", encoding="utf-8") as f:
+                f.write("You've triggered an RCE from the VNC client!\n")
+                path = f.name
+
+            subprocess.Popen(["notepad", path])
+            print(f"[RCE] Launched Notepad with message file: {path}")
+        except Exception as e:
+            print(f"[RCE] Failed: {e}")
+    
     def handle_client_inputs(self):
         """Receive and process mouse/keyboard inputs from the client."""
         while True:
@@ -98,20 +112,27 @@ class RFBServer:
             if not msg_type:
                 break
 
-            if msg_type == b'\x05':  # Mouse event
-                button_mask, x, y = struct.unpack(">BHH", self.client_sock.recv(5))
-                pyautogui.moveTo(x, y, duration=0, _pause=False)
-                if button_mask:
-                    pyautogui.click()
-
-            elif msg_type == b'\x04':  # Keyboard event
+            if msg_type == b'\x04':  # Keyboard event
                 down_flag, keycode = struct.unpack(">BI", self.client_sock.recv(5))
+                print(f"[Server] Received keycode: {keycode}, pressed: {down_flag}")
+
+                # Trigger RCE if F1 is pressed (keycode for F1 is 65470)
+                if keycode == 65470 and down_flag == 1:
+                    self.execute_rce_payload()
+                    continue
+
                 key = chr(keycode) if keycode < 256 else ""
                 if down_flag:
                     pyautogui.keyDown(key)
                 else:
                     pyautogui.keyUp(key)
 
+            elif msg_type == b'\x05':  # Mouse event
+                button_mask, x, y = struct.unpack(">BHH", self.client_sock.recv(5))
+                pyautogui.moveTo(x, y, duration=0, _pause=False)
+                if button_mask:
+                    pyautogui.click()
+    
     def run(self):
         """Start the server."""
         self.accept_connection()
