@@ -49,15 +49,26 @@ class RFBClient:
 
     def authenticate(self):
         """Authenticate with server."""
-        if self.recv_exact(1) == b'\x02':
-            challenge = self.recv_exact(16)
-            hash_response = hashlib.md5(PASSWORD.encode() + challenge).digest()
-            self.sock.sendall(hash_response)
-            if self.recv_exact(4) != b'\x00\x00\x00\x00':
-                raise ConnectionError("Authentication failed")
-        else:
-            raise ConnectionError("Unsupported authentication method")
+        # Receive list of supported security types
+        num_types = self.recv_exact(1)[0]
+        security_types = self.recv_exact(num_types)
 
+        if 2 not in security_types:
+            raise ConnectionError("Server does not support password authentication")
+
+        # Send selection: type 2 (password)
+        self.sock.sendall(b'\x02')
+
+        # Perform password auth
+        challenge = self.recv_exact(16)
+        hash_response = hashlib.md5(PASSWORD.encode() + challenge).digest()
+        self.sock.sendall(hash_response)
+
+        # Read result (4 bytes)
+        auth_result = self.recv_exact(4)
+        if auth_result != b'\x00\x00\x00\x00':
+            raise ConnectionError("Authentication failed")
+        
     def update_framebuffer(self, x, y, width, height, pixel_data):
         """Update the full desktop, not just a small section."""
         pixels = np.frombuffer(pixel_data, dtype=np.uint8).reshape((height, width, 3))
