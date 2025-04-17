@@ -1,116 +1,99 @@
+import time
 import socket
 import struct
 import hashlib
 import threading
-import tkinter as tk
-from PIL import Image, ImageTk
+from PIL import Image
 import numpy as np
+
+from inputs import InputHandler
+from render import Renderer
 
 PASSWORD = "secret"
 
 class RFBClient:
     def __init__(self, host, port):
-        self.host = host
-        self.port = port
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.connect((host, port))
+        self.sock = socket.create_connection((host, port))
+        self.input_handler = InputHandler(self.sock)
+        self.renderer = Renderer(
+            on_key=self.handle_key,
+            on_mouse=self.handle_mouse
+        )
+        self.screen_image = None
+        self.last_update_time = time.time()
 
-        self.window = tk.Tk()
-        self.window.title("Optimized VNC Client")
-        self.canvas = tk.Canvas(self.window)
-        self.canvas.pack(fill=tk.BOTH, expand=True)
-
-        self.img = None
-        self.img_tk = None
-
-        # Bind events for mouse and keyboard
-        self.canvas.bind("<Motion>", self.send_mouse_event)
-        self.canvas.bind("<ButtonPress>", self.send_mouse_event)
-        self.canvas.bind("<ButtonRelease>", self.send_mouse_event)
-        self.window.bind("<KeyPress>", self.send_key_event)
-        self.window.bind("<KeyRelease>", self.send_key_event)
-
-
-
-    def recv_exact(self, num_bytes):
-        """Receive an exact number of bytes from the socket."""
+    def recv_exact(self, n):
+        """Helper function to receive an exact number of bytes from the socket."""
         data = b""
-        while len(data) < num_bytes:
-            chunk = self.sock.recv(num_bytes - len(data))
+        while len(data) < n:
+            chunk = self.sock.recv(n - len(data))
             if not chunk:
                 raise ConnectionError("Connection closed")
             data += chunk
         return data
 
     def perform_handshake(self):
-        """Perform handshake with server."""
+        """Perform RFB protocol handshake."""
         self.sock.sendall(b"RFB 003.008\n")
-        return self.sock.recv(12).decode("utf-8").strip().startswith("RFB 003")
+        return self.sock.recv(12).startswith(b"RFB 003")
 
     def authenticate(self):
-        """Authenticate with server."""
+        """Authenticate with the server using the password."""
         if self.recv_exact(1) == b'\x02':
             challenge = self.recv_exact(16)
-            hash_response = hashlib.md5(PASSWORD.encode() + challenge).digest()
-            self.sock.sendall(hash_response)
+            response = hashlib.md5(PASSWORD.encode() + challenge).digest()
+            self.sock.sendall(response)
             if self.recv_exact(4) != b'\x00\x00\x00\x00':
                 raise ConnectionError("Authentication failed")
-        else:
-            raise ConnectionError("Unsupported authentication method")
-        
-    def update_framebuffer(self, x, y, width, height, pixel_data):
-        """Update the full desktop, not just a small section."""
-        pixels = np.frombuffer(pixel_data, dtype=np.uint8).reshape((height, width, 3))
-        new_patch = Image.fromarray(pixels)
 
-        #create full-screen image if it doesn't exist
-        if self.img is None:
-            screen_width = self.canvas.winfo_screenwidth()
-            screen_height = self.canvas.winfo_screenheight()
-            self.img = Image.new("RGB", (screen_width, screen_height), "black")
+    def handle_key(self, event):
+        """Handle keyboard events and forward them to the input handler."""
+        self.input_handler.send_key_event(event.type, event.keysym, event.char, event.keycode)
 
-        # Paste only the changed section
-        self.img.paste(new_patch, (x, y))
+    def handle_mouse(self, event):
+        """Handle mouse events and forward them to the input handler."""
+        self.input_handler.send_mouse_event(event.type, event.x, event.y, getattr(event, 'num', 0))
 
-        # Display on canvas
-        if self.img_tk is None:
-            self.img_tk = ImageTk.PhotoImage(self.img)
-            self.canvas.create_image(0, 0, anchor=tk.NW, image=self.img_tk)
-        else:
-            self.img_tk.paste(self.img)
+    def update_framebuffer(self, x, y, w, h, pixel_data):
+        """Update the framebuffer with new pixel data."""
+        patch = Image.fromarray(np.frombuffer(pixel_data, dtype=np.uint8).reshape((h, w, 3)))
 
-        self.window.update_idletasks()
-        self.window.update()
+        # Only update if there's a change
+        if self.screen_image is None:
+            self.screen_image = Image.new("RGB", (w, h))
 
-    def send_mouse_event(self, event):
-        """Send mouse movement and button events."""
-        button_mask = 1 if event.type == "4" else 0  # Left-click
-        msg = struct.pack(">BBHH", 5, button_mask, event.x, event.y)
-        self.sock.sendall(msg)
+        # Check if the framebuffer needs an update
+        existing_patch = self.screen_image.crop((x, y, x + w, y + h))
+        if existing_patch != patch:
+            self.screen_image.paste(patch, (x, y))
+            self.renderer.update_image(self.screen_image)
 
-    def send_key_event(self, event):
-        """Send keyboard press and release events."""
-        down_flag = 1 if event.type == "2" else 0  # KeyPress = "2", KeyRelease = "3"
-        keycode = ord(event.char) if event.char else event.keysym_num
-        msg = struct.pack(">BBI", 4, down_flag, keycode)
-        self.sock.sendall(msg)
-
-    def receive_framebuffer_update(self):
-        """Receive and apply framebuffer updates."""
+    def receive_updates(self):
+        """Receive updates from the server and handle framebuffer updates."""
         while True:
-            self.recv_exact(1)
-            self.recv_exact(1)
-            num_rectangles = struct.unpack(">H", self.recv_exact(2))[0]
+            current_time = time.time()
 
-            for _ in range(num_rectangles):
-                x, y, width, height, encoding = struct.unpack(">HHHHI", self.recv_exact(12))
-                pixel_data = self.recv_exact(width * height * 3)
-                self.update_framebuffer(x, y, width, height, pixel_data)
+            # Throttle updates to avoid too many updates per second
+            if current_time - self.last_update_time < 1/30:
+                time.sleep(0.01)  # Sleep for 10ms, avoiding too frequent processing
+            
+            # Receive the next update packet
+            self.recv_exact(1)  # Skip the message type byte
+            self.recv_exact(1)  # Skip padding byte
+            num_rects = struct.unpack(">H", self.recv_exact(2))[0]
 
+            for _ in range(num_rects):
+                # Read the rectangle header (x, y, width, height, encoding)
+                x, y, w, h, encoding = struct.unpack(">HHHHI", self.recv_exact(12))
+                pixel_data = self.recv_exact(w * h * 3)  # Read pixel data
+                self.update_framebuffer(x, y, w, h, pixel_data)
+
+            # Update the time of the last update received
+            self.last_update_time = current_time
 
     def run(self):
-        """Run the VNC client."""
-        if self.perform_handshake():
-            self.authenticate()
-            threading.Thread(target=self.receive_framebuffer_update, daemon=True).start()
-            self.window.mainloop()
+        """Run the RFB client."""
+        self.perform_handshake()
+        self.authenticate()
+        threading.Thread(target=self.receive_updates, daemon=True).start()
+        self.renderer.start_loop()
