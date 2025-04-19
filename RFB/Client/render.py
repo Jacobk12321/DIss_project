@@ -10,6 +10,7 @@ class Renderer:
 
         self.img = None
         self.img_tk = None
+        self.canvas_image = None  # Store canvas image for updates
 
         # Bind input callbacks
         self.window.bind("<KeyPress>", on_key)
@@ -19,8 +20,16 @@ class Renderer:
         self.canvas.bind("<Motion>", on_mouse)
 
     def update_image(self, img):
+        self.img = img  # Store the original image
         self.img_tk = ImageTk.PhotoImage(img)
-        self.canvas.create_image(0, 0, anchor=tk.NW, image=self.img_tk)
+        
+        # Create image on canvas once, then update it
+        if self.canvas_image is None:
+            self.canvas_image = self.canvas.create_image(0, 0, anchor=tk.NW, image=self.img_tk)
+        else:
+            # Update canvas image
+            self.canvas.itemconfig(self.canvas_image, image=self.img_tk)
+            
         self.window.update_idletasks()
         self.window.update()
 

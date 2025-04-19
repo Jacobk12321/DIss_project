@@ -4,7 +4,6 @@ import struct
 import hashlib
 import threading
 from PIL import Image
-import numpy as np
 
 from inputs import InputHandler
 from render import Renderer
@@ -21,6 +20,7 @@ class RFBClient:
         )
         self.screen_image = None
         self.last_update_time = time.time()
+        self.update_threshold = 1/60  #60fps
 
     def recv_exact(self, n):
         """Helper function to receive an exact number of bytes from the socket."""
@@ -56,44 +56,85 @@ class RFBClient:
 
     def update_framebuffer(self, x, y, w, h, pixel_data):
         """Update the framebuffer with new pixel data."""
-        patch = Image.fromarray(np.frombuffer(pixel_data, dtype=np.uint8).reshape((h, w, 3)))
+        # Create array from pixel data
+        patch = Image.frombuffer("RGB", (w, h), pixel_data)
 
-        # Only update if there's a change
+        # Initialize screen image
         if self.screen_image is None:
             self.screen_image = Image.new("RGB", (w, h))
+        
+        # Ensure screen image is large enough 
+        if x + w > self.screen_image.width or y + h > self.screen_image.height:
+            new_width = max(self.screen_image.width, x + w)
+            new_height = max(self.screen_image.height, y + h)
+            new_img = Image.new("RGB", (new_width, new_height))
+            new_img.paste(self.screen_image, (0, 0))
+            self.screen_image = new_img
 
-        # Check if the framebuffer needs an update
-        existing_patch = self.screen_image.crop((x, y, x + w, y + h))
-        if existing_patch != patch:
-            self.screen_image.paste(patch, (x, y))
+        # Apply the patch to our local framebuffer
+        self.screen_image.paste(patch, (x, y))
+        
+        # Rate-limited rendering to prevent flashing
+        current_time = time.time()
+        if current_time - self.last_update_time >= self.update_threshold:
             self.renderer.update_image(self.screen_image)
+            self.last_update_time = current_time
 
     def receive_updates(self):
         """Receive updates from the server and handle framebuffer updates."""
         while True:
-            current_time = time.time()
-
-            # Throttle updates to avoid too many updates per second
-            if current_time - self.last_update_time < 1/30:
-                time.sleep(0.01)  # Sleep for 10ms, avoiding too frequent processing
-            
-            # Receive the next update packet
-            self.recv_exact(1)  # Skip the message type byte
-            self.recv_exact(1)  # Skip padding byte
-            num_rects = struct.unpack(">H", self.recv_exact(2))[0]
-
-            for _ in range(num_rects):
-                # Read the rectangle header (x, y, width, height, encoding)
-                x, y, w, h, encoding = struct.unpack(">HHHHI", self.recv_exact(12))
-                pixel_data = self.recv_exact(w * h * 3)  # Read pixel data
-                self.update_framebuffer(x, y, w, h, pixel_data)
-
-            # Update the time of the last update received
-            self.last_update_time = current_time
+            try:
+                # Receive the message type byte
+                msg_type = self.recv_exact(1)
+                
+                if not msg_type:
+                    print("Connection closed by server")
+                    break
+                    
+                # Skip padding byte
+                self.recv_exact(1)
+                
+                # Number of rectangles
+                num_rects = struct.unpack(">H", self.recv_exact(2))[0]
+                
+                # Process all rectangles when updating
+                updates_in_batch = False
+                for _ in range(num_rects):
+                    # Rectangle header (x, y, width, height, encoding)
+                    x, y, w, h, encoding = struct.unpack(">HHHHI", self.recv_exact(12))
+                    
+                    # Only support raw encoding (0)
+                    if encoding != 0:
+                        print(f"Unsupported encoding: {encoding}")
+                        continue
+                        
+                    # Read pixel data -  w*h*3 bytes (RGB)
+                    pixel_data = self.recv_exact(w * h * 3)
+                    
+                    # Update framebuffer
+                    self.update_framebuffer(x, y, w, h, pixel_data)
+                    updates_in_batch = True
+                
+                #  Render after rectangles are processed
+                if updates_in_batch:
+                    self.renderer.update_image(self.screen_image)
+                    self.last_update_time = time.time()
+                    
+            except (ConnectionError, struct.error) as e:
+                print(f"Error receiving updates: {e}")
+                break
 
     def run(self):
         """Run the RFB client."""
-        self.perform_handshake()
+        if not self.perform_handshake():
+            print("Handshake failed")
+            return
+            
         self.authenticate()
+        print("Connected and authenticated to VNC server")
+        
+        # Start update thread
         threading.Thread(target=self.receive_updates, daemon=True).start()
+        
+        # Start UI main loop
         self.renderer.start_loop()
