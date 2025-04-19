@@ -1,6 +1,6 @@
 This project is a RFB 3.8-based VNC implementation using python 3.13.2.
 
-WARNING: As of 18/4/25 the viewer can experience rapid flashing which can cause harm.
+WARNING: As of 18/4/25 the viewer can experience flashing which can cause harm.
 
 
 Setup:
