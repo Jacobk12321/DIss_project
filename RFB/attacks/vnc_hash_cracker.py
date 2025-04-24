@@ -1,6 +1,6 @@
 import hashlib
 
-# Example: captured challenge and hash from the client
+# captured challenge and hash from the client
 captured_challenge = bytes.fromhex("3defc5e677e85540a98bcfeefdb7566e")
 captured_response = bytes.fromhex("04ae41e76a5c9405a832a633371eaf3a")
 
