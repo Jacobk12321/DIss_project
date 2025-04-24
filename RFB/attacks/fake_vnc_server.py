@@ -22,9 +22,13 @@ def recv_exact(sock, length):
         data += more
     return data
 
-def log_password(password_hash):
+def log_password(challenge ,password_hash):
+    
     with open(LOG_FILE, "a") as f:
+        f.write("-"*75 + "\n")
+        f.write(f"Challenge {challenge.hex()}\n")
         f.write(f"Received password hash: {password_hash.hex()}\n")
+        f.write("-"*75 + "\n")
 
 def start_fake_server(host='0.0.0.0', port=5900):
     server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -51,7 +55,7 @@ def start_fake_server(host='0.0.0.0', port=5900):
     response = recv_exact(client_sock, 16)
     expected = hashlib.md5(FAKE_PASSWORD.encode() + challenge).digest()
 
-    log_password(response)
+    log_password(challenge , response)
 
     if response == expected:
         print("Password match!")
