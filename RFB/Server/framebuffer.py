@@ -10,7 +10,7 @@ class FrameBuffer:
         self.previous_frame = None
         self.frame_interval = 1/30  # 30 FPS
         self.last_frame_time = 0
-        self.min_pixel_threshold = 500  # Minimum number of changed pixels to trigger update
+        self.min_pixel_threshold = 100  # Minimum number of changed pixels to trigger update
 
     def significant_change(self, diff_img, pixel_threshold=None):
         if pixel_threshold is None:
@@ -25,7 +25,7 @@ class FrameBuffer:
         with mss.mss() as sct:
             monitor = sct.monitors[0]  # Get the main monitor
             
-            # Send full frame initially
+            # Send full frame 
             screenshot = sct.grab(monitor)
             img = Image.frombytes("RGB", (screenshot.width, screenshot.height), screenshot.rgb)
             self.previous_frame = img.copy()
@@ -39,7 +39,7 @@ class FrameBuffer:
                 current_time = time.time()
                 elapsed = current_time - self.last_frame_time
                 
-                # If time is too close to nex update then wait 
+                # If time is too close to next update then wait 
                 if elapsed < self.frame_interval:
                     time.sleep(max(0.001, self.frame_interval - elapsed))
                     continue
@@ -52,17 +52,17 @@ class FrameBuffer:
                     # Compute image difference
                     diff_image = ImageChops.difference(img, self.previous_frame)
                     
-                    # Check if there's a significant change
+                    # see if there is a significant change
                     bbox = diff_image.getbbox()
                     if bbox and self.significant_change(diff_image.crop(bbox)):
-                        # Save the current frame and update timestamp
+                        # Save frame and update timestamp
                         self.previous_frame = img.copy()
                         self.last_frame_time = time.time()
                         
                         # Send changed portion
                         self.send_diff(img, bbox, client_sock)
                     else:
-                        # No significant change, just update the timestamp
+                        # No change, just update the timestamp
                         self.last_frame_time = time.time()
                         
                 except (ConnectionResetError, BrokenPipeError) as e:
@@ -78,7 +78,7 @@ class FrameBuffer:
         pixel_data = img.tobytes()
 
         try:
-            # Send framebuffer update message
+            # framebuffer update message
             client_sock.sendall(struct.pack(">BxH", 0, 1))  # Type 0, padding, 1 rectangle
             # Send rectangle header
             client_sock.sendall(struct.pack(">HHHHI", x, y, w, h, 0))  # Raw encoding (0)

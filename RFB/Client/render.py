@@ -39,11 +39,11 @@ class Renderer:
             total_time = now - self.start_time
             avg_fps = len(self.frame_times) / total_time if total_time > 0 else 0
 
-            # Update window title (optional)
-            self.window.title(f"Tkinter VNC Client - Avg FPS: {avg_fps:.2f}")
+            # Update window title 
+            # self.window.title(f"Tkinter VNC Client - Avg FPS: {avg_fps:.2f}")
 
             # Print to terminal
-            print(f"[Client] Average FPS: {avg_fps:.2f}")
+            # print(f"[Client] Average FPS: {avg_fps:.2f}")
 
             self.last_fps_update = now
 
