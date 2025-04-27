@@ -29,7 +29,7 @@ class FrameBuffer:
             screenshot = sct.grab(monitor)
             img = Image.frombytes("RGB", (screenshot.width, screenshot.height), screenshot.rgb)
             self.previous_frame = img.copy()
-            self.send_full_frame(img, client_sock)
+            self.send_whole_frame(img, client_sock)
             
             # Update timing
             self.last_frame_time = time.time()
@@ -72,7 +72,7 @@ class FrameBuffer:
                     print(f"Error capturing screen: {e}")
                     time.sleep(0.5) 
 
-    def send_full_frame(self, img, client_sock):
+    def send_whole_frame(self, img, client_sock):
         x, y = 0, 0
         w, h = img.size
         pixel_data = img.tobytes()
@@ -99,7 +99,7 @@ class FrameBuffer:
         # Limit update size to avoid large memory operations
         if w * h > 1000000:  # Limit to ~1M pixels
             # Send full frame when the update is large
-            self.send_full_frame(img, client_sock)
+            self.send_whole_frame(img, client_sock)
             return
             
         # Crop the image to the changed area
