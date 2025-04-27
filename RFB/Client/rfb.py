@@ -64,7 +64,7 @@ class RFBClient:
 
         self.screen_image.paste(patch, (x, y))
 
-    def receive_updates(self):
+    def receive_updates(self): # screen updates
         while True:
             try:
                 msg_type = self.recv_exact(1)
