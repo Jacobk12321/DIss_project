@@ -2,7 +2,7 @@ from Crypto.Cipher import DES
 
 # Captured from fake server log
 captured_challenge = bytes.fromhex("bd35d217b45d6eba9723baac29f7b9f5")
-captured_response = bytes.fromhex("faa75e316d5fc4de969ff3f48796eaf8")  # replace with actual response
+captured_response = bytes.fromhex("faa75e316d5fc4de969ff3f48796eaf8")  # replace with actual response from the password logs
 
 wordlist = [
     "123456",
@@ -10,7 +10,7 @@ wordlist = [
     "admin",
     "letmein",
     "qwerty",
-    "secret",  # correct password
+    "secret",  # correct password for demo 
     "welcome",
 ]
 
@@ -28,9 +28,9 @@ def crack_vnc_password(challenge, expected_response, wordlist):
     for password in wordlist:
         response = des_encrypt_challenge(challenge, password)
         if response == expected_response:
-            print(f"[+] Password cracked: '{password}'")
+            print(f" Password cracked: '{password}'")
             return password
-    print("[-] Password not found in wordlist.")
+    print(" Password not found in wordlist.")
     return None
 
 if __name__ == "__main__":

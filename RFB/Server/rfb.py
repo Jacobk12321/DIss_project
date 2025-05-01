@@ -5,8 +5,6 @@ import time
 import os
 import pyautogui
 import threading
-import tempfile
-import subprocess
 from framebuffer import FrameBuffer
 from input_handler import InputHandler
 
@@ -27,7 +25,7 @@ class RFBServer:
         print(f"Waiting for a connection...")
 
         self.input_handler = InputHandler()
-        self.framebuffer = FrameBuffer(1920, 1080)  # screen size assumed
+        self.framebuffer = FrameBuffer(1920, 1080)  # screen size 
 
     def accept_connection(self):
         self.client_sock, self.client_addr = self.sock.accept()

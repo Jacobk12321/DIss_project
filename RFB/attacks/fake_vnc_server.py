@@ -24,10 +24,10 @@ def recv_exact(sock, length):
 
 def log_password(challenge, password_response):
     with open(LOG_FILE, "a") as f:
-        f.write("-" * 75 + "\n")
+        f.write("-+" * 75 + "\n")
         f.write(f"Challenge: {challenge.hex()}\n")
         f.write(f"Response:  {password_response.hex()}\n")
-        f.write("-" * 75 + "\n")
+        f.write("-+" * 75 + "\n")
 
 def des_encrypt_challenge(challenge, password):
     key = password.encode('latin-1').ljust(8, b'\x00')[:8]
@@ -56,7 +56,7 @@ def start_fake_server(host='0.0.0.0', port=5900):
     client_sock.sendall(b"RFB 003.008\n")
 
     # Security type
-    client_sock.sendall(b'\x02')  # One type, type 2 (VNC auth)
+    client_sock.sendall(b'\x02')  # type 2 (VNC auth)
 
     # Challenge
     challenge = os.urandom(16)
@@ -68,10 +68,10 @@ def start_fake_server(host='0.0.0.0', port=5900):
     log_password(challenge, response)
 
     if response == expected:
-        print("[+] Password correct")
+        print(" Password correct")
         client_sock.sendall(b'\x00\x00\x00\x00')  # Auth success
     else:
-        print("[-] Password incorrect")
+        print(" Password incorrect")
         client_sock.sendall(b'\x00\x00\x00\x01')  # Auth failed
         client_sock.close()
         return
@@ -82,22 +82,20 @@ def start_fake_server(host='0.0.0.0', port=5900):
             if not msg_type:
                 break
 
-            if msg_type == b'\x03':  # FramebufferUpdateRequest
-                _ = recv_exact(client_sock, 9)
-                print(" Client requested framebuffer")
+            
 
-                fake_screen = generate_fake_screen()
-                client_sock.sendall(b'\x00')  # FramebufferUpdate
-                client_sock.sendall(b'\x00')  # Padding
-                client_sock.sendall(struct.pack(">H", 1))  # 1 rectangle
-                client_sock.sendall(struct.pack(">HHHHI", 0, 0, WIDTH, HEIGHT, 0))
-                client_sock.sendall(fake_screen)
+            fake_screen = generate_fake_screen()
+            client_sock.sendall(b'\x00')  # FramebufferUpdate
+            client_sock.sendall(b'\x00')  # Padding
+            client_sock.sendall(struct.pack(">H", 1))  # 1 rectangle
+            client_sock.sendall(struct.pack(">HHHHI", 0, 0, WIDTH, HEIGHT, 0))
+            client_sock.sendall(fake_screen)
 
-            elif msg_type == b'\x04':  # Key event
+            if msg_type == b'\x04':  # Key event
                 down_flag, key = struct.unpack(">BI", recv_exact(client_sock, 5))
                 print(f"[KEY] Keycode: {key}, down: {down_flag}")
 
-            elif msg_type == b'\x05':  # Mouse event
+            if msg_type == b'\x05':  # Mouse event
                 button_mask, x, y = struct.unpack(">BHH", recv_exact(client_sock, 5))
                 print(f"[MOUSE] Buttons: {button_mask}, Position: ({x}, {y})")
 
