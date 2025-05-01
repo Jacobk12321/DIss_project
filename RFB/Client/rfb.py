@@ -2,7 +2,7 @@ from PIL import Image
 import time
 import socket
 import struct
-import hashlib
+from Crypto.Cipher import DES
 import threading
 
 from inputs import InputHandler
@@ -10,6 +10,10 @@ from render import Renderer
 
 PASSWORD = "secret"
 
+def des_key_from_password(password):
+    key = password.ljust(8, '\x00')[:8]  # Pad or trim to 8 bytes
+    # Bit-reverse each byte
+    return bytes([int('{:08b}'.format(b)[::-1], 2) for b in key.encode("latin-1")])
 class RFBClient:
     def __init__(self, host, port):
         self.sock = socket.create_connection((host, port))
@@ -36,10 +40,13 @@ class RFBClient:
         return self.sock.recv(12).startswith(b"RFB 003")
 
     def authenticate(self):
-        if self.recv_exact(1) == b'\x02':
+        if self.recv_exact(1) == b'\x02': # VNC auth
             challenge = self.recv_exact(16)
-            response = hashlib.md5(PASSWORD.encode() + challenge).digest()
+            des_key = des_key_from_password(PASSWORD)
+            des = DES.new(des_key, DES.MODE_ECB)
+            response = des.encrypt(challenge[:8]) + des.encrypt(challenge[8:])
             self.sock.sendall(response)
+
             if self.recv_exact(4) != b'\x00\x00\x00\x00':
                 raise ConnectionError("Authentication failed")
 
