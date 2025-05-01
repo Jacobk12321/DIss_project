@@ -1,7 +1,7 @@
 import socket
 import struct
 import os
-import hashlib
+from Crypto.Cipher import DES
 from PIL import Image
 
 FAKE_PASSWORD = "secret"
@@ -22,51 +22,60 @@ def recv_exact(sock, length):
         data += more
     return data
 
-def log_password(challenge ,password_hash):
-    
+def log_password(challenge, password_response):
     with open(LOG_FILE, "a") as f:
-        f.write("-"*75 + "\n")
-        f.write(f"Challenge {challenge.hex()}\n")
-        f.write(f"Received password hash: {password_hash.hex()}\n")
-        f.write("-"*75 + "\n")
+        f.write("-" * 75 + "\n")
+        f.write(f"Challenge: {challenge.hex()}\n")
+        f.write(f"Response:  {password_response.hex()}\n")
+        f.write("-" * 75 + "\n")
+
+def des_encrypt_challenge(challenge, password):
+    key = password.encode('latin-1').ljust(8, b'\x00')[:8]
+
+    def reverse_bits(byte):
+        return int('{:08b}'.format(byte)[::-1], 2)
+
+    key = bytes([reverse_bits(b) for b in key])
+    des = DES.new(key, DES.MODE_ECB)
+
+    return des.encrypt(challenge[:8]) + des.encrypt(challenge[8:])
 
 def start_fake_server(host='0.0.0.0', port=5900):
     server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_sock.bind((host, port))
     server_sock.listen(1)
-    print(f" Fake VNC server listening on {host}:{port}...")
+    print(f"Fake VNC server listening on {host}:{port}...")
 
     client_sock, addr = server_sock.accept()
     print(f"Connection from {addr}")
 
-    # Step 1: Protocol Version Handshake
+    # Protocol Version Handshake
     client_version = recv_exact(client_sock, 12).decode().strip()
     print(f"[CLIENT] Version: {client_version}")
     client_sock.sendall(b"RFB 003.008\n")
 
-    # Step 2: Authentication Type 
-    client_sock.sendall(b'\x02')  # password (type 2)
+    # Security type
+    client_sock.sendall(b'\x02')  # One type, type 2 (VNC auth)
 
-    # Step 3: Challenge
+    # Challenge
     challenge = os.urandom(16)
     client_sock.sendall(challenge)
 
+    # Response
     response = recv_exact(client_sock, 16)
-    expected = hashlib.md5(FAKE_PASSWORD.encode() + challenge).digest()
-
-    log_password(challenge , response)
+    expected = des_encrypt_challenge(challenge, FAKE_PASSWORD)
+    log_password(challenge, response)
 
     if response == expected:
-        print("Password match!")
-        client_sock.sendall(b'\x00\x00\x00\x00')  # Success
+        print("[+] Password correct")
+        client_sock.sendall(b'\x00\x00\x00\x00')  # Auth success
     else:
-        print("Password hash mismatch")
-        client_sock.sendall(b'\x00\x00\x00\x01')  # Failure
+        print("[-] Password incorrect")
+        client_sock.sendall(b'\x00\x00\x00\x01')  # Auth failed
         client_sock.close()
         return
 
-    # Main loop
     try:
         while True:
             msg_type = recv_exact(client_sock, 1)
@@ -78,7 +87,6 @@ def start_fake_server(host='0.0.0.0', port=5900):
                 print(" Client requested framebuffer")
 
                 fake_screen = generate_fake_screen()
-
                 client_sock.sendall(b'\x00')  # FramebufferUpdate
                 client_sock.sendall(b'\x00')  # Padding
                 client_sock.sendall(struct.pack(">H", 1))  # 1 rectangle
@@ -97,9 +105,9 @@ def start_fake_server(host='0.0.0.0', port=5900):
                 print(f"[?] Unknown msg type: {msg_type.hex()}")
 
     except Exception as e:
-        print(f" Error: {e}")
+        print(f"Error: {e}")
     finally:
-        print(" Client disconnected.")
+        print("Client disconnected.")
         client_sock.close()
 
 if __name__ == "__main__":
