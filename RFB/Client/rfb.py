@@ -14,6 +14,7 @@ def des_key_from_password(password):
     key = password.ljust(8, '\x00')[:8]  # Pad or trim to 8 bytes
     # Bit-reverse each byte
     return bytes([int('{:08b}'.format(b)[::-1], 2) for b in key.encode("latin-1")])
+
 class RFBClient:
     def __init__(self, host, port):
         self.sock = socket.create_connection((host, port))

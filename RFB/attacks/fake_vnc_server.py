@@ -82,9 +82,8 @@ def start_fake_server(host='0.0.0.0', port=5900):
             if not msg_type:
                 break
 
-            
-
             fake_screen = generate_fake_screen()
+            
             client_sock.sendall(b'\x00')  # FramebufferUpdate
             client_sock.sendall(b'\x00')  # Padding
             client_sock.sendall(struct.pack(">H", 1))  # 1 rectangle
