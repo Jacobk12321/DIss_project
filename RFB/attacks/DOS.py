@@ -174,11 +174,13 @@ def stress_test_input(sock, auth_start, auth_end):
             elapsed_ms = (iteration_end - iteration_start) * 1000
             print(f"Iteration {i+1} took {elapsed_ms:.2f} ms")
 
+    
     end_time = time.time()
 
     total_exec_time = end_time - auth_start
     stress_test_time = end_time - start_time
     avg_op_time = (stress_test_time / n_tests) * 1000
+    
 
     print("Finished stress test.")
     print(f"Total execution time: {total_exec_time:.3f} seconds")
