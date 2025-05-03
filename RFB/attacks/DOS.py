@@ -153,7 +153,7 @@ def receive_updates(sock, renderer):
             print(f"[Client] Update error: {e}")
             break
 
-def stress_test_input(sock, auth_start, auth_end):
+def stress_test_input(sock, auth_start):
     keycode = ord('A')
     n_tests = 1000
     start_time = time.time()
@@ -167,8 +167,13 @@ def stress_test_input(sock, auth_start, auth_end):
         x, y = random.randint(0, 1023), random.randint(0, 767)
         send_mouse_event(sock, 0, x, y)   # Mouse move
 
+        # if random.random() < 0.2: # 20%
+        #     send_mouse_event(sock ,1,x ,y) # mouse button down
+        #     send_mouse_event(sock,0,x,y) # mouse button up 
+
         time.sleep(0.001)
         iteration_end = time.time()
+
 
         if i % 10 == 0:
             elapsed_ms = (iteration_end - iteration_start) * 1000
@@ -214,7 +219,7 @@ def main():
     threading.Thread(target=receive_updates, args=(sock, renderer), daemon=True).start()
 
     if AUTO_INPUT:
-        threading.Thread(target=stress_test_input, args=(sock, auth_start, auth_end), daemon=True).start()
+        threading.Thread(target=stress_test_input, args=(sock,auth_start), daemon=True).start()
 
     renderer.start_loop()
 

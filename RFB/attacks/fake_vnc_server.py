@@ -3,15 +3,24 @@ import struct
 import os
 from Crypto.Cipher import DES
 from PIL import Image
+from datetime import datetime
+import mss
+import numpy as np
+
 
 FAKE_PASSWORD = "secret"
 WIDTH, HEIGHT = 1024, 768
 LOG_FILE = "passwords_log.txt"
 
-def generate_fake_screen():
-    """Create a fake screen"""
-    img = Image.new("RGB", (WIDTH, HEIGHT), color=(30, 30, 160))
-    return img.tobytes()
+
+def generate_real_screen():
+    with mss.mss() as sct:
+        monitor = sct.monitors[1]  # full screen
+        screenshot = sct.grab(monitor)
+        img = Image.frombytes('RGB', screenshot.size, screenshot.rgb)
+        img = img.resize((WIDTH, HEIGHT))
+        return img.tobytes()
+
 
 def recv_exact(sock, length):
     data = b""
@@ -22,12 +31,17 @@ def recv_exact(sock, length):
         data += more
     return data
 
-def log_password(challenge, password_response):
+def log_password(challenge, password_response, client_addr):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ip, port = client_addr
     with open(LOG_FILE, "a") as f:
         f.write("-+" * 75 + "\n")
+        f.write(f"Timestamp: {timestamp}\n") # stores when the challenges were received
+        f.write(f"Client: {ip}:{port}\n")
         f.write(f"Challenge: {challenge.hex()}\n")
         f.write(f"Response:  {password_response.hex()}\n")
         f.write("-+" * 75 + "\n")
+
 
 def des_encrypt_challenge(challenge, password):
     key = password.encode('latin-1').ljust(8, b'\x00')[:8]
@@ -65,7 +79,7 @@ def start_fake_server(host='0.0.0.0', port=5900):
     # Response
     response = recv_exact(client_sock, 16)
     expected = des_encrypt_challenge(challenge, FAKE_PASSWORD)
-    log_password(challenge, response)
+    log_password(challenge, response , addr)
 
     if response == expected:
         print(" Password correct")
@@ -82,13 +96,13 @@ def start_fake_server(host='0.0.0.0', port=5900):
             if not msg_type:
                 break
 
-            fake_screen = generate_fake_screen()
+            real_screen = generate_real_screen()
             
             client_sock.sendall(b'\x00')  # FramebufferUpdate
             client_sock.sendall(b'\x00')  # Padding
             client_sock.sendall(struct.pack(">H", 1))  # 1 rectangle
             client_sock.sendall(struct.pack(">HHHHI", 0, 0, WIDTH, HEIGHT, 0))
-            client_sock.sendall(fake_screen)
+            client_sock.sendall(real_screen)
 
             if msg_type == b'\x04':  # Key event
                 down_flag, key = struct.unpack(">BI", recv_exact(client_sock, 5))
