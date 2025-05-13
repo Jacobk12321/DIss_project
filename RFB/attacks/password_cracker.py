@@ -1,8 +1,8 @@
 from Crypto.Cipher import DES
 
 # Captured from fake server log
-captured_challenge = bytes.fromhex("bd35d217b45d6eba9723baac29f7b9f5")
-captured_response = bytes.fromhex("faa75e316d5fc4de969ff3f48796eaf8")  # replace with actual response from the password logs
+captured_challenge = bytes.fromhex("a3a09109996eb1e0f0274b912d404115")
+captured_response = bytes.fromhex("dddd16cf27429f57cab70f11da4d5238")  # replace with actual response from the password logs
 
 wordlist = [
     "123456",
@@ -27,9 +27,12 @@ def crack_vnc_password(challenge, expected_response, wordlist):
     print("Starting brute-force...")
     for password in wordlist:
         response = des_encrypt_challenge(challenge, password)
+        print(f"Trying password: {password}")
         if response == expected_response:
             print(f" Password cracked: '{password}'")
             return password
+        else:
+            print(f"Password '{password}' is incorrect")
     print(" Password not found in wordlist.")
     return None
 
