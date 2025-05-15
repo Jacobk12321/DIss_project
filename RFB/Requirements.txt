@@ -1,9 +1,5 @@
+pycryptodome
+Pillow
 pyautogui
-pillow
-keyboard
-mouse
-numpy
-opencv-python
-pygame
-PyOpenGL
 mss
+numpy
