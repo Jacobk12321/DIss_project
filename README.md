@@ -18,5 +18,5 @@ How to get running?
  
 This will open a window of the other screen allowing for updates from the client to the server.
 
-To close the connections use the control key + c.
+To close the connections use the control key + c or close the viewer.
 
